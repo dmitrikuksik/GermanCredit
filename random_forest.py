@@ -16,16 +16,14 @@ def split_dataframe(df,split_at): # podzial danych na zbior trenujacy i testujac
 
 def get_predicted_value(prediction,index): #zwraca przewidywana wartosc klasy
 	for i in prediction:
-		if i[0] == index: #gdzie i[0] to index w zbiorze df 
-			return i[1] #i[1] jest przewidywana klasa	
+		if i[0] == index: #gdzie i[0] to index w zbiorze df
+			return i[1] #i[1] jest przewidywana klasa
 
 # ustawia wagi (wieksze wagi dla tych, na ktorych dotychczasowy model sie mylil)
 # dodaje delta do elementow
 # pozniej funckja sample w bagging normalizuje te wagi
 
-def set_weights(df,predictions,delta): 
-	weights = [1/df.shape[0] for _ in range(df.shape[0])]	
-	wrong_predicts = 0
+def set_weights(df,weights,predictions,delta):
 	wrong_predicts_indx = []
 
 	if len(predictions) == 0:
@@ -35,16 +33,15 @@ def set_weights(df,predictions,delta):
 			pr_val = get_predicted_value(predictions[-1],df.iloc[[i]].index[0])
 			if df.iloc[[i]]['decision'].values[0] != pr_val:
 				weights[i] += delta #dodanie wagi do elemenot
-				wrong_predicts += 1
-				wrong_predicts_indx.append(df.iloc[[i]].index[0])	
+				wrong_predicts_indx.append(df.iloc[[i]].index[0])
 	return 	weights
-		
+
 
 def bagging(df,weights): # metoda bootsrapowa tworzenia podziobiora ze zbioru trenujacego
 	return df.sample(n=df.shape[0],replace=True,weights=weights)
 
 
-# Entropy and Information Gain for ID3 
+# Entropy and Information Gain for ID3
 def calculate_entropy(df):
 	P = df[df['decision']==1].shape[0]
 	N = df[df['decision']==2].shape[0]
@@ -76,7 +73,7 @@ def select_node_gini(df,attributes):
 		for ctg in df[attr].unique():
 			sum += (df[df[attr]==ctg].shape[0]/df[attr].shape[0])*calculate_gini(df[df[attr]==ctg])
 		gini_sums.append(sum)
-	return attributes[gini_sums.index(min(gini_sums))]	
+	return attributes[gini_sums.index(min(gini_sums))]
 
 def random_attributes(amount,attributes): #losowanie atrybutow dla kazdego wezla
 	rand = random.sample(range(0,len(attributes)-1),amount)
@@ -91,7 +88,7 @@ def check_leaves(df): # sprawdzenie czy mozna ustawic liscie
 		return 1
 	return 0
 
-def decision_tree(df_tree,amount,attributes):	#funckja tworzenia root i start tworzenia drzewa	
+def decision_tree(df_tree,amount,attributes):	#funckja tworzenia root i start tworzenia drzewa
 	attrs = random_attributes(amount,attributes)
 	root = select_node_gini(df_tree,attrs)
 
@@ -103,15 +100,15 @@ def decision_tree(df_tree,amount,attributes):	#funckja tworzenia root i start tw
 				   ctg,root_node,
 				   amount,attributes)
 
-	return root_node	
+	return root_node
 
 def split_tree(df,ctg,parent_node,amount,attributes): # rekurencyjna funkcja tworzenia drzewa
 	if check_leaves(df) == 2:
 		parent_node.set_leave(ctg,2)
-		return 
+		return
 	if check_leaves(df) == 1:
 		parent_node.set_leave(ctg,1)
-		return 
+		return
 
 	attrs = random_attributes(amount,attributes)
 	node_attr = select_node_gini(df,attrs)
@@ -159,7 +156,7 @@ def count_votes(votes_table): # oblicznie liczby glosow
 		bad = votes.count(2)
 		if good > bad:
 			forest_classification.append(1)
-		elif bad >= good:
+		elif bad > good:
 			forest_classification.append(2)
 	return forest_classification
 
@@ -185,11 +182,11 @@ def main(argv):
 
 	[df_train,df_test] = split_dataframe(df, split_at)
 
-	for _ in range(len(forest_size)):
+	for fs in forest_size:
 
 		train_predictions = []
 		test_predictions = []
-		
+
 		votes_table = []
 		forest_classification = []
 
@@ -198,9 +195,11 @@ def main(argv):
 		correct_classification = 0
 		cost = 0
 
+		weights = [1/df_train.shape[0] for _ in range(df_train.shape[0])]
+
 		print("Building tree's models...")
-		for _ in range(forest_size[-1]):
-			weights = set_weights(df_train,train_predictions,delta)
+		for _ in range(fs):
+			weights = set_weights(df_train,weights,train_predictions,delta)
 			df_bootstrap = bagging(df_train,weights)
 			root_node = decision_tree(df_bootstrap,attr_amount,attributes)
 			roots.append(root_node)
@@ -208,7 +207,7 @@ def main(argv):
 
 		print("Testing random forest...")
 		for root in roots:
-			test_predictions.append(test_tree(df_test,root))	
+			test_predictions.append(test_tree(df_test,root))
 
 		votes_table = ensemble_voting(df_test,test_predictions)
 		forest_classification = count_votes(votes_table)
@@ -228,6 +227,3 @@ def main(argv):
 
 if __name__ == '__main__':
 	main(sys.argv[1:])
-
-
-
